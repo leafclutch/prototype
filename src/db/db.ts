@@ -1,22 +1,31 @@
-
+// src/db/db.ts
 import Dexie, { type Table } from 'dexie';
-// 1. Interfaces (Type Definitions)
+
 export interface Category {
-  id: string; // UUID
+  id: string;
   name: string;
   isActive: boolean;
-  createdAt: string; // ISO Date String
+  createdAt: string;
   updatedAt: string;
-  restored?: boolean;
+}
+
+export interface Product {
+  id: string;
+  categoryId: string;
+  name: string;
+  price: number;
+  isActive: boolean;
+  availableDays?: string[];
+  isAvailableNow?: boolean;
 }
 
 export interface Order {
-  id: string; // UUID
-  tableNumber: string; // Tables can be "1", "7", or "7B"
+  id: string;
+  tableNumber: string;
   status: 'order' | 'served' | 'paid' | 'cancelled';
   createdAt: string;
   updatedAt: string;
-  paidAt?: string; // Only exists if paid
+  paidAt?: string;
   totalAmount: number;
   paymentCash: number;
   paymentOnline: number;
@@ -24,33 +33,33 @@ export interface Order {
 }
 
 export interface OrderItem {
-  id?: number; // Auto-increment fine for sub-items
+  id?: number;
   orderId: string;
   itemName: string;
   categoryName: string;
   quantity: number;
   rate: number;
   total: number;
+  originalTable?: string; // NEW: To track merged items (e.g., "Table 1")
 }
 
-// 2. Database Class
 export class RestaurantDB extends Dexie {
   categories!: Table<Category>;
+  products!: Table<Product>;
   orders!: Table<Order>;
   orderItems!: Table<OrderItem>;
 
   constructor() {
     super('RestaurantPOS_DB');
     
-    this.version(1).stores({
-      // Primary Key is first argument
-      // We index fields we need to search/filter by
+    // UPDATE TO VERSION 5
+    this.version(5).stores({
       categories: 'id, name, isActive', 
+      products: 'id, categoryId, name, isActive, isAvailableNow',
       orders: 'id, tableNumber, status, createdAt, paidAt, exportedToExcel',
-      orderItems: '++id, orderId' // ++id means auto-increment
+      orderItems: '++id, orderId' // Index remains same
     });
   }
 }
 
-// 3. Export a single instance
 export const db = new RestaurantDB();

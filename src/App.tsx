@@ -1,90 +1,84 @@
 // src/App.tsx
 import { useState } from 'react';
 import { Layout } from './components/Layout';
-import { CategoryManager } from './components/CategoryManager';
+import { MenuManager } from './components/MenuManager';
 import { TableGrid } from './components/TableGrid';
-import { OrderView } from './components/OrderView'; // Import new component
+import { OrderView } from './components/OrderView';
+import { OrderList } from './components/OrderList';
+import { SalesDashboard } from './components/SalesDashboard';
 import { orderService } from './services/orderService';
 import type { Order } from './db/db';
 
-type View = 'tables' | 'menu' | 'order';
+type View = 'tables' | 'active-list' | 'menu' | 'sales' | 'order';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('tables');
+  const [returnView, setReturnView] = useState<View>('tables'); 
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
 
-  // 1. Handle clicking a table
-  const handleTableSelection = async (tableNum: string) => {
+  const handleTableClick = async (tableNum: string, source: View) => {
     try {
-      // Check if there is already an active order
+      // 1. Try to find existing order
       let order = await orderService.getOrderByTable(tableNum);
       
+      // 2. If not found, create one
       if (!order) {
-        // If not, create one
         order = await orderService.createOrder(tableNum);
       }
       
-      setActiveOrder(order);
-      setCurrentView('order');
+      // 3. Set state (ensure order is valid)
+      if (order) {
+        setActiveOrder(order);
+        setReturnView(source);
+        setCurrentView('order');
+      }
     } catch (error) {
       console.error(error);
       alert("Error opening table");
     }
   };
 
+  const handleCloseOrder = async () => {
+    // Clean up empty orders on close
+    if (activeOrder) {
+      const freshOrder = await orderService.getOrderById(activeOrder.id);
+      if (freshOrder && freshOrder.totalAmount <= 0) {
+        await orderService.deleteOrder(freshOrder.id);
+      }
+    }
+    setActiveOrder(null);
+    setCurrentView(returnView);
+  };
+
   return (
     <Layout>
-      {/* Navigation Tabs (Only show if NOT in order mode) */}
       {currentView !== 'order' && (
-        <div className="flex gap-4 mb-6 border-b pb-4">
-          <button
-            onClick={() => setCurrentView('tables')}
-            className={`px-6 py-2 rounded-full font-bold transition-colors ${
-              currentView === 'tables' 
-                ? 'bg-blue-600 text-white shadow-md' 
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-            }`}
-          >
-            🍽️ Tables
-          </button>
-          <button
-            onClick={() => setCurrentView('menu')}
-            className={`px-6 py-2 rounded-full font-bold transition-colors ${
-              currentView === 'menu' 
-                ? 'bg-blue-600 text-white shadow-md' 
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-            }`}
-          >
-            📂 Menu Setup
-          </button>
+        <div className="flex w-full gap-4 mb-6 border-b pb-4">
+          <NavButton active={currentView === 'tables'} onClick={() => setCurrentView('tables')}>🍽️ Tables</NavButton>
+          <NavButton active={currentView === 'active-list'} onClick={() => setCurrentView('active-list')}>📝 Orders</NavButton>
+          <NavButton active={currentView === 'menu'} onClick={() => setCurrentView('menu')}>📂 Menu</NavButton>
+          <NavButton active={currentView === 'sales'} onClick={() => setCurrentView('sales')}>📈 Sales</NavButton>
         </div>
       )}
 
-      {/* View Switcher */}
-      <div className="animate-fade-in">
-        {currentView === 'tables' && (
-          // We modify TableGrid to pass the click handler
-          // Note: We need to update TableGrid to support "onClick" cleanly
-          // For now, we reuse the logic inside TableGrid or pass a prop
-          // Let's assume TableGrid emits the ID via a wrapper or direct prop in next iteration
-          // Actually, let's update TableGrid usage to use the prop we added:
-          <TableGrid onTableSelect={handleTableSelection} /> 
-        )}
-        
-        {currentView === 'menu' && <CategoryManager />}
+      <div className="animate-fade-in w-full relative">
+        {currentView === 'tables' && <TableGrid onTableSelect={(t) => handleTableClick(t, 'tables')} />}
+        {currentView === 'active-list' && <OrderList onSelectOrder={(t) => handleTableClick(t, 'active-list')} />}
+        {currentView === 'menu' && <MenuManager />}
+        {currentView === 'sales' && <SalesDashboard />}
         
         {currentView === 'order' && activeOrder && (
-          <OrderView 
-            order={activeOrder} 
-            onBack={() => {
-              setActiveOrder(null);
-              setCurrentView('tables');
-            }} 
-          />
+          <OrderView order={activeOrder} onBack={handleCloseOrder} />
         )}
       </div>
     </Layout>
   )
 }
+
+const NavButton = ({ active, onClick, children }: any) => (
+  <button onClick={onClick} className={`flex-1 py-4 rounded-xl font-bold text-lg transition-all shadow-sm ${active ? 'bg-gray-900 text-white shadow-lg transform scale-[1.02]' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}>
+    {children}
+  </button>
+);
 
 export default App
